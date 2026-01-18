@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Digitální Roláž - Artgoritmy</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <aside class="controls">
+        <header class="app-header">
+            <i class="ph ph-faders"></i>
+            <h1>Digital Rollage</h1>
+        </header>
+
+        <div class="control-section">
+            <label><i class="ph ph-paint-brush-broad"></i> Technika</label>
+            <div class="select-wrapper">
+                <select id="modeSelect">
+                    <option value="geo" selected>Geometrické vzory</option>
+                    <option value="timelapse">Klasická roláž</option>
+                    <option value="chaos">Chaos & Glitch</option>
+                    <option value="poly">Polyekrán</option>
+                </select>
+                <i class="ph ph-caret-down select-icon"></i>
+            </div>
+        </div>
+
+        <div id="dynamicControls" class="scrollable-content">
+
+            <div id="geoControls" class="control-group">
+                <div class="section-title">Nastavení vzoru</div>
+
+                <div class="input-group">
+                    <label>Tvar</label>
+                    <div class="select-wrapper">
+                        <select id="geoShape">
+                            <option value="horizontal">Horizontální pruhy</option>
+                            <option value="vertical">Vertikální pruhy</option>
+                            <option value="circles">Sústredné kružnice</option>
+                            <option value="checkerboard">Šachovnice</option>
+                            <option value="diamonds">Kosoštvorce</option>
+                            <option value="triangles">Trojuholníky</option>
+                            <option value="spiral">Lúče / Špirála</option>
+                        </select>
+                        <i class="ph ph-caret-down select-icon"></i>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Veľkosť (px): <span id="geoSizeVal">50</span></label>
+                    <input type="range" id="geoSize" min="1" max="300" value="50">
+                </div>
+
+                <div class="filters-row">
+                    <label class="checkbox-btn">
+                        <input type="checkbox" id="filterBW1">
+                        <span>BW Pozadí</span>
+                    </label>
+                    <label class="checkbox-btn">
+                        <input type="checkbox" id="filterBW2">
+                        <span>BW Vzor</span>
+                    </label>
+                </div>
+
+                <div class="upload-grid">
+                    <div class="upload-zone" onclick="document.getElementById('uploadGeo1').click()">
+                        <input type="file" id="uploadGeo1" accept="image/*" hidden>
+                        <img id="previewGeo1" class="preview-img hidden">
+                        <div class="upload-placeholder" id="placeholderGeo1">
+                            <i class="ph ph-image"></i>
+                            <span>Pozadie</span>
+                        </div>
+                    </div>
+                    <button id="btnSwapGeo" class="swap-btn" title="Prehodiť vrstvy">
+                        <i class="ph ph-arrows-left-right"></i>
+                    </button>
+                    <div class="upload-zone" onclick="document.getElementById('uploadGeo2').click()">
+                        <input type="file" id="uploadGeo2" accept="image/*" hidden>
+                        <img id="previewGeo2" class="preview-img hidden">
+                        <div class="upload-placeholder" id="placeholderGeo2">
+                            <i class="ph ph-intersect"></i>
+                            <span>Vzor</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="timelapseControls" class="control-group hidden">
+                <div class="section-title">Séria</div>
+                <div class="upload-zone large" onclick="document.getElementById('uploadMulti').click()">
+                    <input type="file" id="uploadMulti" accept="image/*" multiple hidden>
+                    <div class="upload-placeholder">
+                        <i class="ph ph-images"></i>
+                        <span>Vybrat sérii fotek</span>
+                        <small>(Min. 2 fotky)</small>
+                    </div>
+                </div>
+                <div id="multiPreviewGrid" class="preview-grid hidden"></div>
+                <div id="multiPreviewText" class="hidden" style="color:var(--accent); font-size: 0.8rem; margin-top:5px;"></div>
+            </div>
+
+            <div id="chaosControls" class="control-group hidden">
+                <div class="section-title">Chaos & Glitch</div>
+
+                <div class="upload-zone large" onclick="document.getElementById('uploadChaos').click()">
+                    <input type="file" id="uploadChaos" accept="image/*" hidden>
+                    <img id="previewChaos" class="preview-img hidden">
+                    <div class="upload-placeholder" id="placeholderChaos">
+                        <i class="ph ph-lightning"></i>
+                        <span>Vybrat obrázek</span>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Intenzita: <span id="chaosVal">30</span></label>
+                    <input type="range" id="chaosIntensity" min="0" max="100" value="30">
+                </div>
+            </div>
+
+            <div id="polyControls" class="control-group hidden">
+                <div class="section-title">Mřížka</div>
+                <div class="grid-row">
+                    <div class="input-group">
+                        <label>Stĺpce <span id="colVal">5</span></label>
+                        <input type="range" id="polyCols" min="1" max="20" value="5">
+                    </div>
+                    <div class="input-group">
+                        <label>Riadky <span id="rowVal">5</span></label>
+                        <input type="range" id="polyRows" min="1" max="20" value="5">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Scatter: <span id="scatterVal">0</span></label>
+                    <input type="range" id="polyScatter" min="0" max="100" value="0">
+                </div>
+            </div>
+
+            <div id="stripSettings" class="control-group hidden">
+                <div class="input-group">
+                    <label>Šířka proužku: <span id="stripVal">20</span></label>
+                    <input type="range" id="stripWidth" min="1" max="100" value="20">
+                </div>
+            </div>
+
+        </div>
+
+        <div class="action-bar">
+            <button id="processBtn" class="btn-primary">
+                <i class="ph ph-magic-wand"></i> Generovat
+            </button>
+            <button id="downloadBtn" class="btn-secondary">
+                <i class="ph ph-download-simple"></i>
+            </button>
+        </div>
+
+        <input type="file" id="upload1" accept="image/*" style="display:none">
+        <input type="file" id="upload2" accept="image/*" style="display:none">
+    </aside>
+
+    <main class="canvas-area">
+        <canvas id="artCanvas"></canvas>
+        <div class="copyright">
+            Created by <strong>Adriana Buchmei</strong> &copy; 2026
+        </div>
+    </main>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
