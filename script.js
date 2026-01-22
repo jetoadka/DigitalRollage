@@ -189,7 +189,7 @@ function updateUI() {
 modeSelect.addEventListener('change', updateUI);
 updateUI(); // Run once on load
 
-// --- ACTION BUTTONS
+// --- ACTION BUTTONS ---
 btnProcess.addEventListener('click', () => {
     const mode = modeSelect.value;
     if (mode === 'timelapse') renderTimeLapse();
@@ -210,15 +210,44 @@ function applyFilter(ctx, isBW) {
     ctx.filter = isBW ? 'grayscale(100%) contrast(1.2)' : 'none';
 }
 
+// --- SMART CROP (Object-fit: Cover) ---
+function drawImageCover(ctx, img, x, y, w, h) {
+    // Source
+    let sW = img.width;
+    let sH = img.height;
+    // Destination
+    let dW = w;
+    let dH = h;
+
+    let sRatio = sW / sH;
+    let dRatio = dW / dH;
+    let sX, sY, sWidth, sHeight;
+
+    if (dRatio > sRatio) {
+        sWidth = sW;
+        sHeight = sW / dRatio;
+        sX = 0;
+        sY = (sH - sHeight) / 2;
+    } else {
+        sHeight = sH;
+        sWidth = sH * dRatio;
+        sY = 0;
+        sX = (sW - sWidth) / 2;
+    }
+    ctx.drawImage(img, sX, sY, sWidth, sHeight, x, y, dW, dH);
+}
+
+
 // --- ---------------------------------------
 // --- ----------- ALGORITHMS ----------------
 // --- ---------------------------------------
 
-// 1. TIMELAPSE (Stripes from multiple images)
+// 1. TIMELAPSE
 function renderTimeLapse() {
     if (frames.length < 2) { alert("Please upload at least 2 images!"); return; }
     const masterFrame = frames[0];
-    canvas.width = masterFrame.width; canvas.height = masterFrame.height;
+    canvas.width = masterFrame.width;
+    canvas.height = masterFrame.height;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const stripWidth = parseInt(stripInput.value);
     let frameIndex = 0;
@@ -238,7 +267,7 @@ function renderTimeLapse() {
     }
 }
 
-// 2. CHAOS (Glitch effect on single image)
+// 2. CHAOS
 function renderChaos() {
     if (!imgChaosLoaded) { alert("Please upload an image!"); return; }
     canvas.width = imgChaos.width; canvas.height = imgChaos.height;
@@ -250,13 +279,15 @@ function renderChaos() {
     // Draw random strips
     while (x < canvas.width) {
         let randomW = Math.ceil(baseStripWidth + (Math.random() * baseStripWidth) - (baseStripWidth / 2));
-        if (randomW < 1) randomW = 1; if (x + randomW > canvas.width) randomW = canvas.width - x;
+        if (randomW < 1) randomW = 1;
+        if (x + randomW > canvas.width) randomW = canvas.width - x;
 
         // Calculate random shifts
         let yShift = Math.floor((Math.random() * intensity * 2) - intensity);
         let xShift = (Math.random() > 0.7) ? Math.floor((Math.random() * intensity) - (intensity / 2)) : 0;
 
-        let sx = x + xShift; if(sx<0) sx=0; if(sx+randomW > imgChaos.width) sx = imgChaos.width - randomW;
+        let sx = x + xShift; if(sx<0) sx=0;
+        if(sx+randomW > imgChaos.width) sx = imgChaos.width - randomW;
         let sHeight = imgChaos.height - Math.abs(yShift);
 
         ctx.drawImage(imgChaos, sx, Math.max(0, yShift), randomW, sHeight, x, 0, randomW + 1, canvas.height);
@@ -264,56 +295,128 @@ function renderChaos() {
     }
 }
 
-// 3. POLYSCREEN (Grid of images)
+// 3. POLYSCREEN
 function renderPolyekran() {
     let sourceImages = frames.length > 0 ? frames : (img1Loaded ? [img1] : []);
     if (sourceImages.length === 0) { alert("Please upload images!"); return; }
+
     const masterImg = sourceImages[0];
-    canvas.width = masterImg.width; canvas.height = masterImg.height;
+    canvas.width = masterImg.width;
+    canvas.height = masterImg.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    const cols = parseInt(polyColsInput.value); const rows = parseInt(polyRowsInput.value);
+    const cols = parseInt(polyColsInput.value);
+    const rows = parseInt(polyRowsInput.value);
     const scatter = parseInt(polyScatterInput.value);
-    const cellW = canvas.width / cols; const cellH = canvas.height / rows;
-    let counter = 0;
+
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+
+    const canW = canvas.width;
+    const canH = canvas.height;
 
     // Loop rows and columns
     for (let r=0; r<rows; r++) {
         for (let c=0; c<cols; c++) {
-            let dx = Math.floor(c*cellW); let dy = Math.floor(r*cellH);
-            let dw = Math.floor((c+1)*cellW) - dx; let dh = Math.floor((r+1)*cellH) - dy;
+            let dx = Math.floor(c * cellW);
+            let dy = Math.floor(r * cellH);
+            let dw = Math.floor((c + 1) * cellW) - dx;
+            let dh = Math.floor((r + 1) * cellH) - dy;
 
-            let currentImg = sourceImages[counter % sourceImages.length];
+            // Image selection (Diagonal Shift)
+            let imgIndex = (c + r) % sourceImages.length;
+            let currentImg = sourceImages[imgIndex];
 
-            // Calculate source dimensions
-            let sx = dx * (currentImg.width/canvas.width); let sy = dy * (currentImg.height/canvas.height);
-            let sW = dw * (currentImg.width/canvas.width); let sH = dh * (currentImg.height/canvas.height);
+            let imgW = currentImg.width;
+            let imgH = currentImg.height;
+
+            // Reduction/enlargement ratio
+            let ratioW = imgW / canW;
+            let ratioH = imgH / canH;
+
+            let factor = Math.min(ratioW, ratioH);
+
+            let cropGlobalW = canW * factor;
+            let cropGlobalH = canH * factor;
+
+            let offsetGlobalX = (imgW - cropGlobalW) / 2;
+            let offsetGlobalY = (imgH - cropGlobalH) / 2;
+
+            // Calculation of the cutout for this specific cube
+            let sx = offsetGlobalX + (dx * factor);
+            let sy = offsetGlobalY + (dy * factor);
+            let sw = dw * factor;
+            let sh = dh * factor;
 
             // Apply scatter (random offset)
-            if(scatter>0) { sx += (Math.random()-0.5)*scatter*20; sy += (Math.random()-0.5)*scatter*20; }
+            let drawX = dx;
+            let drawY = dy;
+            if(scatter > 0) {
+                drawX += (Math.random()-0.5)*scatter*20;
+                drawY += (Math.random()-0.5)*scatter*20;
+            }
 
-            ctx.drawImage(currentImg, sx, sy, sW, sH, dx, dy, dw+0.5, dh+0.5);
-            counter++;
+            ctx.drawImage(currentImg, sx, sy, sw, sh, drawX, drawY, dw+0.5, dh+0.5);
         }
     }
 }
 
-// --- HELPER: CREATE PATTERN TILE ---
+// --- HELPER: PATTERN TILE ---
 function createPatternCanvas(shape, size) {
-    const pCanvas = document.createElement('canvas'); const pCtx = pCanvas.getContext('2d');
+    const pCanvas = document.createElement('canvas');
+    const pCtx = pCanvas.getContext('2d');
     if (shape === 'checkerboard') {
-        pCanvas.width = size*2; pCanvas.height = size*2; pCtx.fillStyle='#000';
-        pCtx.fillRect(0,0,size,size); pCtx.fillRect(size,size,size,size);
+        pCanvas.width = size*2;
+        pCanvas.height = size*2;
+        pCtx.fillStyle='#000';
+        pCtx.fillRect(0,0,size,size);
+        pCtx.fillRect(size,size,size,size);
     } else if (shape === 'diamonds') {
-        const ts = size*2; pCanvas.width = ts; pCanvas.height = ts; pCtx.fillStyle='#000';
-        pCtx.beginPath(); pCtx.moveTo(size,0); pCtx.lineTo(ts,size); pCtx.lineTo(size,ts); pCtx.lineTo(0,size); pCtx.fill();
+        const ts = size*2;
+        pCanvas.width = ts;
+        pCanvas.height = ts;
+        pCtx.fillStyle='#000';
+        pCtx.beginPath();
+        pCtx.moveTo(size,0);
+        pCtx.lineTo(ts,size);
+        pCtx.lineTo(size,ts);
+        pCtx.lineTo(0,size);
+        pCtx.fill();
     } else if (shape === 'triangles') {
-        const h = size*(Math.sqrt(3)/2); pCanvas.width=size; pCanvas.height=h*2; pCtx.fillStyle='#000';
-        pCtx.beginPath(); pCtx.moveTo(0,0); pCtx.lineTo(size,0); pCtx.lineTo(size/2,h); pCtx.fill();
-        pCtx.beginPath(); pCtx.moveTo(-size/2,h); pCtx.lineTo(size/2,h); pCtx.lineTo(0,h*2); pCtx.fill();
-        pCtx.beginPath(); pCtx.moveTo(size/2,h); pCtx.lineTo(size*1.5,h); pCtx.lineTo(size,h*2); pCtx.fill();
-    } else if (shape === 'horizontal') { pCanvas.width=1; pCanvas.height=size*2; pCtx.fillStyle='#000'; pCtx.fillRect(0,0,1,size); }
-    else if (shape === 'vertical') { pCanvas.width=size*2; pCanvas.height=1; pCtx.fillStyle='#000'; pCtx.fillRect(0,0,size,1); }
+        const h = size*(Math.sqrt(3)/2);
+        pCanvas.width=size;
+        pCanvas.height=h*2;
+        pCtx.fillStyle='#000';
+
+        pCtx.beginPath();
+        pCtx.moveTo(0,0);
+        pCtx.lineTo(size,0);
+        pCtx.lineTo(size/2,h);
+        pCtx.fill();
+
+        pCtx.beginPath();
+        pCtx.moveTo(-size/2,h);
+        pCtx.lineTo(size/2,h);
+        pCtx.lineTo(0,h*2);
+        pCtx.fill();
+
+        pCtx.beginPath();
+        pCtx.moveTo(size/2,h);
+        pCtx.lineTo(size*1.5,h);
+        pCtx.lineTo(size,h*2);
+        pCtx.fill();
+    } else if (shape === 'horizontal')
+    {
+        pCanvas.width=1; pCanvas.height=size*2;
+        pCtx.fillStyle='#000';
+        pCtx.fillRect(0,0,1,size);
+    }
+    else if (shape === 'vertical')
+    {
+        pCanvas.width=size*2; pCanvas.height=1;
+        pCtx.fillStyle='#000';
+        pCtx.fillRect(0,0,size,1);
+    }
     return pCanvas;
 }
 
@@ -321,14 +424,16 @@ function createPatternCanvas(shape, size) {
 function renderGeometric() {
     if (!img1Loaded) { alert("Please upload Background!"); return; }
     const imgObj2 = img2Loaded ? img2 : img1;
-    canvas.width = img1.width; canvas.height = img1.height;
+    canvas.width = img1.width;
+    canvas.height = img1.height;
 
     // Draw Background
     applyFilter(ctx, filterBW1.checked);
     ctx.drawImage(img1, 0, 0);
     applyFilter(ctx, false);
 
-    const shape = geoShapeSelect.value; const size = parseInt(geoSizeInput.value);
+    const shape = geoShapeSelect.value;
+    const size = parseInt(geoSizeInput.value);
 
     // Create Mask
     const maskCanvas = document.createElement('canvas');
@@ -339,19 +444,32 @@ function renderGeometric() {
     if (['checkerboard','diamonds','triangles','horizontal','vertical'].includes(shape)) {
         const tile = createPatternCanvas(shape, size);
         const pattern = mCtx.createPattern(tile, 'repeat');
-        mCtx.fillStyle = pattern; mCtx.fillRect(0,0,maskCanvas.width,maskCanvas.height);
+        mCtx.fillStyle = pattern;
+        mCtx.fillRect(0,0,maskCanvas.width,maskCanvas.height);
     } else {
         // Radial patterns
-        mCtx.fillStyle = '#000'; mCtx.beginPath();
-        const cx = canvas.width/2; const cy = canvas.height/2; const maxR = Math.sqrt(cx*cx+cy*cy)*1.5;
+        mCtx.fillStyle = '#000';
+        mCtx.beginPath();
+        const cx = canvas.width/2;
+        const cy = canvas.height/2;
+        const maxR = Math.sqrt(cx*cx+cy*cy)*1.5;
         if (shape === 'circles') {
-            for(let r=0; r<maxR; r+=size*2) { mCtx.arc(cx,cy,r+size,0,Math.PI*2,false); mCtx.arc(cx,cy,r,0,Math.PI*2,true); mCtx.closePath(); }
+            for(let r=0; r<maxR; r+=size*2)
+            {
+                mCtx.arc(cx,cy,r+size,0,Math.PI*2,false);
+                mCtx.arc(cx,cy,r,0,Math.PI*2,true);
+                mCtx.closePath();
+            }
             mCtx.fill();
         } else if (shape === 'spiral') {
             let aw = Math.max(1, Math.min(90, size/5));
             for(let a=0; a<360; a+=aw*2) {
-                mCtx.moveTo(cx,cy); const r1=(a*Math.PI)/180; const r2=((a+aw)*Math.PI)/180;
-                mCtx.lineTo(cx+Math.cos(r1)*maxR, cy+Math.sin(r1)*maxR); mCtx.arc(cx,cy,maxR,r1,r2,false); mCtx.lineTo(cx,cy);
+                mCtx.moveTo(cx,cy);
+                const r1=(a*Math.PI)/180;
+                const r2=((a+aw)*Math.PI)/180;
+                mCtx.lineTo(cx+Math.cos(r1)*maxR, cy+Math.sin(r1)*maxR);
+                mCtx.arc(cx,cy,maxR,r1,r2,false);
+                mCtx.lineTo(cx,cy);
             }
             mCtx.fill();
         }
@@ -360,10 +478,11 @@ function renderGeometric() {
     // Apply composite (Source-In)
     mCtx.globalCompositeOperation = 'source-in';
     applyFilter(mCtx, filterBW2.checked);
-    mCtx.drawImage(imgObj2, 0, 0, imgObj2.width, imgObj2.height, 0, 0, canvas.width, canvas.height);
+    drawImageCover(mCtx, imgObj2, 0, 0, canvas.width, canvas.height);
+
     applyFilter(mCtx, false);
 
-    // Draw Masked Image onto Canvas
+    // Draw masked image onto canvas
     ctx.drawImage(maskCanvas, 0, 0);
 }
 
